@@ -1,36 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { generatePDFQuote } from './utils/pdfGenerator';
 
-// ============================================================================
-// PASTE YOUR CLOUDFLARE WORKER URL INSIDE THE QUOTES BELOW (OPTIONAL)
-// Example: 'https://project-salute-api.yourname.workers.dev'
-// ============================================================================
 const DEFAULT_D1_API_URL = 'https://project-salute-api.binayaksinbox.workers.dev';
 
 const SCHEMES = {
-  pli_santosh: {
-    id: 'pli_santosh',
-    name: 'PLI Santosh (Endowment Assurance)',
-    quota: 'PLI',
-    bonusPerThousand: 52,
-  },
-  pli_suraksha: {
-    id: 'pli_suraksha',
-    name: 'PLI Suraksha (Whole Life Assurance)',
-    quota: 'PLI',
-    bonusPerThousand: 76,
-  },
-  rpli_santosh: {
-    id: 'rpli_santosh',
-    name: 'RPLI Gram Santosh (Endowment)',
-    quota: 'RPLI',
-    bonusPerThousand: 48,
-  },
-  rpli_suraksha: {
-    id: 'rpli_suraksha',
-    name: 'RPLI Gram Suraksha (Whole Life)',
-    quota: 'RPLI',
-    bonusPerThousand: 60,
-  },
+  pli_santosh: { id: 'pli_santosh', name: 'PLI Santosh (Endowment Assurance)', quota: 'PLI', bonusPerThousand: 52 },
+  pli_suraksha: { id: 'pli_suraksha', name: 'PLI Suraksha (Whole Life Assurance)', quota: 'PLI', bonusPerThousand: 76 },
+  rpli_santosh: { id: 'rpli_santosh', name: 'RPLI Gram Santosh (Endowment)', quota: 'RPLI', bonusPerThousand: 48 },
+  rpli_suraksha: { id: 'rpli_suraksha', name: 'RPLI Gram Suraksha (Whole Life)', quota: 'RPLI', bonusPerThousand: 60 },
 };
 
 function sanitizeText(str) {
@@ -40,7 +17,6 @@ function sanitizeText(str) {
 function calculateOfficialPLIMetrics(schemeKey, sumAssured, entryAge, termYears) {
   const scheme = SCHEMES[schemeKey] || SCHEMES.pli_santosh;
   const saUnits = sumAssured / 1000;
-
   const ageLoading = Math.max(0, entryAge - 25) * 0.42;
   const termFactor = (1000 / termYears) * 0.86;
   const quotaAdj = scheme.quota === 'RPLI' ? 2.1 : 0;
@@ -74,40 +50,20 @@ function calculateOfficialPLIMetrics(schemeKey, sumAssured, entryAge, termYears)
   const loanEligible5Yr = Math.round(surrenderValue5Yr * 0.9);
 
   const earlySurrenderTdsApplicable = surrenderValue3Yr >= 100000 && surrenderValue3Yr > premiumsPaid3Yr;
-  const earlySurrenderTdsAmt = earlySurrenderTdsApplicable
-    ? Math.round((surrenderValue3Yr - premiumsPaid3Yr) * 0.05)
-    : 0;
+  const earlySurrenderTdsAmt = earlySurrenderTdsApplicable ? Math.round((surrenderValue3Yr - premiumsPaid3Yr) * 0.05) : 0;
 
   return {
-    scheme,
-    monthlyPremium,
-    annualPremium,
-    totalInvested,
-    annualBonus,
-    totalBonus,
-    terminalBonus,
-    totalMaturity,
-    netProfit,
-    multiplier,
-    roiPct,
-    paidUp3Yr: Math.round(paidUp3Yr),
-    svFactor3Yr: svFactor3Yr.toFixed(3),
-    surrenderValue3Yr,
-    loanEligible3Yr,
-    premiumsPaid3Yr,
-    surrenderValue5Yr,
-    loanEligible5Yr,
-    earlySurrenderTdsAmt,
+    scheme, monthlyPremium, annualPremium, totalInvested, annualBonus, totalBonus, terminalBonus,
+    totalMaturity, netProfit, multiplier, roiPct, paidUp3Yr: Math.round(paidUp3Yr),
+    svFactor3Yr: svFactor3Yr.toFixed(3), surrenderValue3Yr, loanEligible3Yr, premiumsPaid3Yr,
+    surrenderValue5Yr, loanEligible5Yr, earlySurrenderTdsAmt
   };
 }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('calculator');
   const [leads, setLeads] = useState([]);
-
-  const [d1ApiUrl, setD1ApiUrl] = useState(
-    () => localStorage.getItem('salute_d1_url') || DEFAULT_D1_API_URL
-  );
+  const [d1ApiUrl, setD1ApiUrl] = useState(() => localStorage.getItem('salute_d1_url') || DEFAULT_D1_API_URL);
   const [d1Status, setD1Status] = useState('offline');
   const [showD1Modal, setShowD1Modal] = useState(false);
 
@@ -119,41 +75,24 @@ export default function App() {
 
   const [tdsScheme, setTdsScheme] = useState('scss');
   const [tdsPrincipal, setTdsPrincipal] = useState(1000000);
-  const [tdsStrategies, setTdsStrategies] = useState({
-    form15g: true,
-    splitCif: true,
-    divertPli: false,
-  });
+  const [tdsStrategies, setTdsStrategies] = useState({ form15g: true, splitCif: true, divertPli: false });
 
   const [formError, setFormError] = useState('');
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    segment: 'Assam Police & Battalions',
-    dept: '',
-    qualification_route: 'PLI',
-    product: 'PLI Santosh (Endowment)',
-    crosssell: 'Xonchoyor Xopun (Monthly 1-Yr TD Ladder)',
-    official: '',
-    office_category: 'Sub Office (SO)',
-    office: '',
-    followup: '',
-    remark: '',
+    name: '', phone: '', segment: 'Assam Police & Battalions', dept: '',
+    qualification_route: 'PLI', product: 'PLI Santosh (Endowment)',
+    crosssell: 'Xonchoyor Xopun (Monthly 1-Yr TD Ladder)', official: '',
+    office_category: 'Sub Office (SO)', office: '', followup: '', remark: ''
   });
 
   const metrics = calculateOfficialPLIMetrics(calcScheme, calcSa, calcAge, calcTerm);
-  const investedPct = Math.min(
-    Math.max(Math.round((metrics.totalInvested / metrics.totalMaturity) * 100), 20),
-    80
-  );
+  const investedPct = Math.min(Math.max(Math.round((metrics.totalInvested / metrics.totalMaturity) * 100), 20), 80);
 
   useEffect(() => {
     try {
       const local = JSON.parse(localStorage.getItem('salute_leads')) || [];
       setLeads(local);
-    } catch {
-      setLeads([]);
-    }
+    } catch { setLeads([]); }
     if (d1ApiUrl) fetchLeadsFromD1(d1ApiUrl);
   }, []);
 
@@ -167,64 +106,39 @@ export default function App() {
       const data = await res.json();
       const remoteList = Array.isArray(data) ? data : data.leads || [];
       const normalized = remoteList.map((r) => ({
-        id: r.id,
-        name: r.full_name || r.name || '',
-        phone: r.whatsapp || r.phone || '',
-        segment: r.segment || 'Assam Police',
-        dept: r.institution || r.dept || '',
-        qualification_route: r.qualification_route || 'PLI',
-        product: r.primary_product || r.product || 'PLI Santosh (Endowment)',
-        crosssell: r.secondary_product || r.crosssell || 'Xonchoyor Xopun (Monthly 1-Yr TD Ladder)',
-        official: r.official_name || r.official || '',
-        office_category: r.office_category || 'Sub Office (SO)',
-        office: r.office_name || r.office || '',
-        followup: r.follow_up_date || r.followup || '',
-        remark: r.remarks || r.remark || '',
+        id: r.id, name: r.full_name || r.name || '', phone: r.whatsapp || r.phone || '',
+        segment: r.segment || 'Assam Police', dept: r.institution || r.dept || '',
+        qualification_route: r.qualification_route || 'PLI', product: r.primary_product || r.product || 'PLI Santosh (Endowment)',
+        crosssell: r.secondary_product || r.crosssell || 'Xonchoyor Xopun', official: r.official_name || r.official || '',
+        office_category: r.office_category || 'Sub Office (SO)', office: r.office_name || r.office || '',
+        followup: r.follow_up_date || r.followup || '', remark: r.remarks || r.remark || '',
         date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
       }));
       setLeads(normalized);
       localStorage.setItem('salute_leads', JSON.stringify(normalized));
       setD1Status('online');
-    } catch {
-      setD1Status('offline');
-    }
+    } catch { setD1Status('offline'); }
   };
 
   const pushLocalLeadsToD1 = async () => {
     const cleanUrl = d1ApiUrl.replace(/\/+$/, '');
-    if (!cleanUrl) {
-      setShowD1Modal(true);
-      return;
-    }
+    if (!cleanUrl) { setShowD1Modal(true); return; }
     setD1Status('syncing');
     try {
       for (const l of leads) {
         await fetch(`${cleanUrl}/api/leads`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: String(l.id),
-            full_name: l.name,
-            whatsapp: l.phone,
-            segment: l.segment || 'Assam Police',
-            institution: l.dept,
-            qualification_route: l.qualification_route || 'PLI',
-            primary_product: l.product,
-            secondary_product: l.crosssell,
-            official_name: l.official,
-            office_category: l.office_category || 'Sub Office (SO)',
-            office_name: l.office,
-            follow_up_date: l.followup || '',
-            remarks: l.remark || '',
-          }),
+            id: String(l.id), full_name: l.name, whatsapp: l.phone, segment: l.segment,
+            institution: l.dept, qualification_route: l.qualification_route || 'PLI',
+            primary_product: l.product, secondary_product: l.crosssell, official_name: l.official,
+            office_category: l.office_category, office_name: l.office, follow_up_date: l.followup || '', remarks: l.remark || ''
+          })
         });
       }
       await fetchLeadsFromD1(cleanUrl);
       alert('Synced with Cloudflare D1 database!');
-    } catch {
-      setD1Status('offline');
-      alert('Could not reach Cloudflare Worker URL.');
-    }
+    } catch { setD1Status('offline'); alert('Could not reach Cloudflare Worker URL.'); }
   };
 
   const handleSaveD1Url = (e) => {
@@ -239,7 +153,6 @@ export default function App() {
   const handleLeadSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
-
     const cleanName = sanitizeText(formData.name);
     const cleanPhone = formData.phone.replace(/\D/g, '').slice(-10);
     const cleanDept = sanitizeText(formData.dept);
@@ -253,28 +166,13 @@ export default function App() {
     }
 
     const newLead = {
-      id: `SALUTE-${Date.now()}`,
-      name: cleanName,
-      phone: cleanPhone,
-      segment: formData.segment,
-      dept: cleanDept,
-      qualification_route: formData.qualification_route,
-      product: formData.product,
-      crosssell: formData.crosssell,
-      official: cleanOfficial,
-      office_category: formData.office_category,
-      office: cleanOffice,
-      followup: formData.followup,
-      remark: cleanRemark,
-      sa: calcSa,
-      age: calcAge,
-      term: calcTerm,
-      monthlyPremium: metrics.monthlyPremium,
-      maturity: metrics.totalMaturity,
-      multiplier: metrics.multiplier,
-      roiPct: metrics.roiPct,
-      loan3Yr: metrics.loanEligible3Yr,
-      date: new Date().toLocaleDateString('en-IN'),
+      id: `SALUTE-${Date.now()}`, name: cleanName, phone: cleanPhone, segment: formData.segment,
+      dept: cleanDept, qualification_route: formData.qualification_route, product: formData.product,
+      crosssell: formData.crosssell, official: cleanOfficial, office_category: formData.office_category,
+      office: cleanOffice, followup: formData.followup, remark: cleanRemark, sa: calcSa, age: calcAge,
+      term: calcTerm, monthlyPremium: metrics.monthlyPremium, maturity: metrics.totalMaturity,
+      multiplier: metrics.multiplier, roiPct: metrics.roiPct, loan3Yr: metrics.loanEligible3Yr,
+      date: new Date().toLocaleDateString('en-IN')
     };
 
     const updated = [newLead, ...leads];
@@ -285,35 +183,20 @@ export default function App() {
       const cleanUrl = d1ApiUrl.replace(/\/+$/, '');
       try {
         await fetch(`${cleanUrl}/api/leads`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: newLead.id,
-            full_name: newLead.name,
-            age: newLead.age,
-            whatsapp: newLead.phone,
-            segment: newLead.segment,
-            institution: newLead.dept,
-            qualification_route: newLead.qualification_route,
-            primary_product: newLead.product,
-            secondary_product: newLead.crosssell,
-            sum_assured: newLead.sa,
-            term_years: newLead.term,
-            official_name: newLead.official,
-            office_category: newLead.office_category,
-            office_name: newLead.office,
-            follow_up_date: newLead.followup,
-            remarks: newLead.remark,
-            created_at: new Date().toISOString(),
-          }),
+            id: newLead.id, full_name: newLead.name, age: newLead.age, whatsapp: newLead.phone,
+            segment: newLead.segment, institution: newLead.dept, qualification_route: newLead.qualification_route,
+            primary_product: newLead.product, secondary_product: newLead.crosssell, sum_assured: newLead.sa,
+            term_years: newLead.term, official_name: newLead.official, office_category: newLead.office_category,
+            office_name: newLead.office, follow_up_date: newLead.followup, remarks: newLead.remark, created_at: new Date().toISOString()
+          })
         });
         setD1Status('online');
-      } catch {
-        setD1Status('offline');
-      }
+      } catch { setD1Status('offline'); }
     }
 
-    generatePDFQuote(newLead);
+    generatePDFQuote(newLead, calcSa, calcTerm, metrics);
     setFormData({ ...formData, name: '', phone: '', dept: '', followup: '', remark: '' });
     setActiveTab('crm');
   };
@@ -325,100 +208,8 @@ export default function App() {
     localStorage.setItem('salute_leads', JSON.stringify(updated));
     if (d1ApiUrl) {
       const cleanUrl = d1ApiUrl.replace(/\/+$/, '');
-      try {
-        await fetch(`${cleanUrl}/api/leads/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      } catch {}
+      try { await fetch(`${cleanUrl}/api/leads/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {}
     }
-  };
-
-  const generatePDFQuote = (l) => {
-    if (!window.jspdf) {
-      alert('PDF library loading. Please try again in 2 seconds.');
-      return;
-    }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    doc.setFillColor(185, 28, 28);
-    doc.rect(0, 0, 210, 30, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('INDIA POST - PROJECT SALUTE', 14, 12);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Dhemaji Sub Division | Lakhimpur Postal Division, Assam Circle', 14, 19);
-    doc.text('Financial Security for Those Who Serve and Care (100% Govt. of India Guarantee)', 14, 25);
-
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('OFFICIAL CUSTOMER BENEFIT, ROI & LOAN ELIGIBILITY QUOTE', 14, 39);
-
-    doc.autoTable({
-      startY: 44,
-      head: [['Customer & Institution Profile', 'India Post Field Official & Office']],
-      body: [
-        [
-          `Customer Name: ${l.name}\nWhatsApp: +91-${l.phone}\nSegment: ${l.segment || 'Uniformed / Healthcare'}\nInstitution: ${l.dept}`,
-          `Name of SPM/BPM/Official/ME: ${l.official}\nOffice Type: ${l.office_category || 'SO/BO/HO'}\nOffice Name: ${l.office}\nDate Issued: ${l.date}`,
-        ],
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [185, 28, 28], textColor: [255, 255, 255], fontStyle: 'bold' },
-      styles: { fontSize: 9.5, cellPadding: 3.5 },
-    });
-
-    const saVal = l.sa || calcSa;
-    const termVal = l.term || calcTerm;
-    const mPrem = l.monthlyPremium || metrics.monthlyPremium;
-    const matVal = l.maturity || metrics.totalMaturity;
-    const multVal = l.multiplier || metrics.multiplier;
-    const roiVal = l.roiPct || metrics.roiPct;
-    const loanVal = l.loan3Yr || metrics.loanEligible3Yr;
-
-    doc.autoTable({
-      startY: doc.lastAutoTable.finalY + 7,
-      head: [['Benefit Parameter', 'Projected Sovereign Value']],
-      body: [
-        ['Primary PLI / RPLI Scheme', `${l.product} (SA: Rs. ${saVal.toLocaleString('en-IN')} | Term: ${termVal} Yrs)`],
-        ['Estimated Monthly Deposit', `Rs. ${mPrem.toLocaleString('en-IN')} / month (Tax Rebate u/s 80C)`],
-        ['Projected Total Maturity Payout', `Rs. ${matVal.toLocaleString('en-IN')} (100% Tax-Free u/s 10(10D) - Zero TDS)`],
-        ['Return on Investment (ROI) & Multiplier', `${multVal}x Total Premiums Multiplier (+${roiVal}% Net Sovereign ROI)`],
-        ['3-Year Loan Eligibility (90% Surrender Value)', `Approx. Rs. ${loanVal.toLocaleString('en-IN')} (Available after 3 continuous years)`],
-        ['Secondary Cross-Sell Selected', `${l.crosssell} (https://binayakbhatt.github.io/sanchayer_sopno/)`],
-      ],
-      theme: 'striped',
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
-      styles: { fontSize: 9.5, cellPadding: 3.5 },
-    });
-
-    let finalY = doc.lastAutoTable.finalY + 9;
-
-    if (l.followup) {
-      doc.setFillColor(254, 243, 199);
-      doc.rect(14, finalY, 182, 11, 'F');
-      doc.setTextColor(180, 83, 9);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text(`Scheduled Follow-Up Date: ${l.followup}`, 18, finalY + 7.5);
-      finalY += 16;
-    }
-
-    if (l.remark) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(30, 41, 59);
-      doc.text('Field Remark:', 14, finalY);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text(l.remark, 14, finalY + 5.5, { maxWidth: 180 });
-    }
-
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text('Issued under Project SALUTE | India Post — Dhemaji Sub Division (Lakhimpur Postal Division)', 14, 286);
-    doc.save(`Project_SALUTE_Quote_${l.name.replace(/\s+/g, '_')}.pdf`);
   };
 
   const exportCSV = () => {
@@ -430,9 +221,7 @@ export default function App() {
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'Project_SALUTE_Leads.csv';
-    a.click();
+    a.href = url; a.download = 'Project_SALUTE_Leads.csv'; a.click();
   };
 
   const posbRates = { scss: 0.082, mis: 0.074, td5yr: 0.075, td1yr: 0.069 };
@@ -469,15 +258,12 @@ export default function App() {
                 </span>
               </div>
               <p className="text-xs text-red-100">
-                India Post — Lakhimpur Postal Division | Financial Security for Those Who Serve & Care
+                India Post — Lakhimpur Postal Division | Financial Security for Those Who Serve &amp; Care
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => setShowD1Modal(true)}
-            className="text-xs bg-red-950/80 hover:bg-red-950 px-3 py-1.5 rounded-full border border-red-400/40 flex items-center space-x-2 cursor-pointer"
-          >
+          <button onClick={() => setShowD1Modal(true)} className="text-xs bg-red-950/80 hover:bg-red-950 px-3 py-1.5 rounded-full border border-red-400/40 flex items-center space-x-2 cursor-pointer">
             <span className={`w-2 h-2 rounded-full ${d1Status === 'online' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
             <span>{d1Status === 'online' ? 'Cloudflare D1 Live' : 'Configure Cloudflare D1'}</span>
           </button>
@@ -494,13 +280,7 @@ export default function App() {
             { id: 'tds', label: '5. POSB & PLI TDS Reduction Planner' },
             { id: 'sop', label: '6. Competent Authority SOP' },
           ].map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`py-3 px-1 border-b-2 font-bold text-xs md:text-sm whitespace-nowrap cursor-pointer ${
-                activeTab === t.id ? 'border-red-700 text-red-700' : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
+            <button key={t.id} onClick={() => setActiveTab(t.id)} className={`py-3 px-1 border-b-2 font-bold text-xs md:text-sm whitespace-nowrap cursor-pointer ${activeTab === t.id ? 'border-red-700 text-red-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
               {t.label}
             </button>
           ))}
@@ -510,17 +290,13 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-6 flex-grow w-full space-y-6">
         {activeTab === 'calculator' && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-black text-slate-800 mb-1">
-              Official PLI & RPLI Wealth-Doubler, Live ROI & 3-Year Loan Calculator
-            </h2>
-            <p className="text-xs text-slate-500 mb-5">
-              Calibrated to official Department of Posts Sankalan tables (Santosh ₹52/₹1,000, Suraksha ₹76/₹1,000, RPLI ₹48–₹60/₹1,000)
-            </p>
+            <h2 className="text-lg font-black text-slate-800 mb-1">Official PLI &amp; RPLI Wealth-Doubler, Live ROI &amp; 3-Year Loan Calculator</h2>
+            <p className="text-xs text-slate-500 mb-5">Calibrated to official Department of Posts Sankalan tables (Santosh ₹52/₹1,000, Suraksha ₹76/₹1,000, RPLI ₹48–₹60/₹1,000)</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Select PLI / RPLI Quota & Plan</label>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Select PLI / RPLI Quota &amp; Plan</label>
                   <select value={calcScheme} onChange={(e) => setCalcScheme(e.target.value)} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
                     <option value="pli_santosh">PLI Santosh (Endowment - ₹52 Bonus/1,000)</option>
                     <option value="pli_suraksha">PLI Suraksha (Whole Life - ₹76 Bonus/1,000)</option>
@@ -528,7 +304,6 @@ export default function App() {
                     <option value="rpli_suraksha">RPLI Gram Suraksha (Whole Life - ₹60 Bonus/1,000)</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Sum Assured: ₹{calcSa.toLocaleString('en-IN')}</label>
                   <select value={calcSa} onChange={(e) => setCalcSa(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
@@ -540,12 +315,10 @@ export default function App() {
                     <option value={5000000}>₹50,00,000 (Max PLI)</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Entry Age: {calcAge} Years</label>
                   <input type="range" min="19" max="50" value={calcAge} onChange={(e) => setCalcAge(Number(e.target.value))} className="w-full accent-red-700 cursor-pointer" />
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Policy Term: {calcTerm} Years</label>
                   <input type="range" min="10" max="30" value={calcTerm} onChange={(e) => setCalcTerm(Number(e.target.value))} className="w-full accent-red-700 cursor-pointer" />
@@ -567,7 +340,7 @@ export default function App() {
                     <div className="text-xl font-black text-blue-900 mt-1">₹{metrics.netProfit.toLocaleString('en-IN')}</div>
                   </div>
                   <div className="bg-purple-50 p-3.5 rounded-xl border border-purple-200">
-                    <span className="text-[11px] font-bold uppercase text-purple-700">ROI & Multiplier</span>
+                    <span className="text-[11px] font-bold uppercase text-purple-700">ROI &amp; Multiplier</span>
                     <div className="text-xl font-black text-purple-900 mt-1">{metrics.multiplier}x (+{metrics.roiPct}%)</div>
                   </div>
                 </div>
@@ -616,12 +389,7 @@ export default function App() {
                     Open one 1-Year POTD every month for 12 months. From Month 13 onwards, receive a guaranteed maturity payout every single month!
                   </p>
                 </div>
-                <a
-                  href="https://binayakbhatt.github.io/sanchayer_sopno/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black px-5 py-3 rounded-xl text-xs whitespace-nowrap shadow-md text-center"
-                >
+                <a href="https://binayakbhatt.github.io/sanchayer_sopno/" target="_blank" rel="noopener noreferrer" className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black px-5 py-3 rounded-xl text-xs whitespace-nowrap shadow-md text-center">
                   Open Xonchoyor Xopun Portal ↗
                 </a>
               </div>
@@ -675,7 +443,7 @@ export default function App() {
 
         {activeTab === 'capture' && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black text-slate-800 mb-1">Shift-Change Lead Capture & Direct Customer Benefit PDF Quote</h2>
+            <h2 className="text-xl font-black text-slate-800 mb-1">Shift-Change Lead Capture &amp; Direct Customer Benefit PDF Quote</h2>
             <p className="text-xs text-slate-500 mb-5">Captures Name of SPM/BPM/Officials/ME, Office Type (BO/SO/HO), and optional Follow-Up Date.</p>
             {formError && <div className="mb-4 p-3 bg-red-50 border border-red-300 text-red-800 text-xs font-bold rounded-xl">{formError}</div>}
 
@@ -691,10 +459,10 @@ export default function App() {
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-700 mb-1">Target Segment *</label>
                 <select value={formData.segment} onChange={(e) => setFormData({ ...formData, segment: e.target.value })} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
-                  <option value="Assam Police & Battalions">Assam Police & Battalions</option>
-                  <option value="Assam Fire & Emergency Services">Assam Fire & Emergency Services</option>
+                  <option value="Assam Police & Battalions">Assam Police &amp; Battalions</option>
+                  <option value="Assam Fire & Emergency Services">Assam Fire &amp; Emergency Services</option>
                   <option value="Healthcare Professionals">Healthcare Professionals</option>
-                  <option value="Defence & CAPF">Defence & CAPF</option>
+                  <option value="Defence & CAPF">Defence &amp; CAPF</option>
                 </select>
               </div>
               <div>
@@ -753,7 +521,7 @@ export default function App() {
               </div>
               <div className="md:col-span-2 flex justify-end pt-2">
                 <button type="submit" className="bg-red-700 hover:bg-red-800 text-white font-black px-6 py-3 rounded-xl text-sm shadow-md cursor-pointer">
-                  Save Lead & Download Direct PDF Quote
+                  Save Lead &amp; Download Direct PDF Quote
                 </button>
               </div>
             </form>
@@ -781,7 +549,7 @@ export default function App() {
                     <th className="p-3">Customer</th>
                     <th className="p-3">Institution</th>
                     <th className="p-3">Schemes</th>
-                    <th className="p-3">SPM/BPM/Official & Office</th>
+                    <th className="p-3">SPM/BPM/Official &amp; Office</th>
                     <th className="p-3">Follow-Up</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
@@ -795,7 +563,7 @@ export default function App() {
                       <td className="p-3 font-semibold">{l.official}<div className="font-normal text-slate-500">{l.office_category} - {l.office}</div></td>
                       <td className="p-3">{l.followup || '—'}</td>
                       <td className="p-3 text-right space-x-2">
-                        <button onClick={() => generatePDFQuote(l)} className="bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold cursor-pointer">PDF Quote</button>
+                        <button onClick={() => generatePDFQuote(l, calcSa, calcTerm, metrics)} className="bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold cursor-pointer">PDF Quote</button>
                         <button onClick={() => deleteLead(l.id)} className="bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg cursor-pointer">Delete</button>
                       </td>
                     </tr>
@@ -809,7 +577,7 @@ export default function App() {
 
         {activeTab === 'tds' && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black text-slate-800 mb-1">POSB Section 194A & PLI Section 194DA TDS Reduction Planner</h2>
+            <h2 className="text-xl font-black text-slate-800 mb-1">POSB Section 194A &amp; PLI Section 194DA TDS Reduction Planner</h2>
             <p className="text-xs text-slate-500 mb-5">Demonstrate how customers can legally reduce their TDS deduction to ₹0.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
@@ -861,7 +629,7 @@ export default function App() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
             <h2 className="text-xl font-black text-slate-800">Competent Authority Approach SOP (Dhemaji Sub Division)</h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              <strong>1. Meeting the Competent Authority (SP / Commandant / Jt. DHS / Medical Superintendent):</strong> Frame the visit as an Official Central Government India Post Financial Welfare & Service Camp under Project SALUTE. Request a non-intrusive 1-table Helpdesk during shift-change windows.
+              <strong>1. Meeting the Competent Authority (SP / Commandant / Jt. DHS / Medical Superintendent):</strong> Frame the visit as an Official Central Government India Post Financial Welfare &amp; Service Camp under Project SALUTE. Request a non-intrusive 1-table Helpdesk during shift-change windows.
             </p>
             <p className="text-xs text-slate-600 leading-relaxed">
               <strong>2. Dual PLI + RPLI Funnel:</strong> Permanent Govt/Degree/Diploma staff qualify for PLI (₹52–₹76 bonus). Contractual/ANM/Support staff qualify for RPLI Gram Santosh (₹48–₹60 bonus). Cross-sell Xonchoyor Xopun 1-Year Monthly TD Ladder to every prospect.
@@ -874,17 +642,11 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveD1Url} className="bg-white p-6 rounded-2xl max-w-md w-full space-y-4">
             <h3 className="text-lg font-black text-slate-900">Connect Cloudflare D1 Worker URL</h3>
-            <p className="text-xs text-slate-500">Paste your Cloudflare Worker URL (e.g. https://project-salute-api.yourname.workers.dev)</p>
-            <input
-              type="url"
-              value={d1ApiUrl}
-              onChange={(e) => setD1ApiUrl(e.target.value)}
-              placeholder="https://project-salute-api.yourname.workers.dev"
-              className="w-full p-2.5 border border-slate-300 rounded-lg text-sm"
-            />
+            <p className="text-xs text-slate-500">Paste your Cloudflare Worker URL (e.g. https://project-salute-api.binayaksinbox.workers.dev)</p>
+            <input type="url" value={d1ApiUrl} onChange={(e) => setD1ApiUrl(e.target.value)} placeholder="https://project-salute-api.binayaksinbox.workers.dev" className="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setShowD1Modal(false)} className="px-4 py-2 text-xs font-bold text-slate-600">Cancel</button>
-              <button type="submit" className="bg-red-700 text-white px-4 py-2 rounded-lg text-xs font-bold">Save & Connect</button>
+              <button type="submit" className="bg-red-700 text-white px-4 py-2 rounded-lg text-xs font-bold">Save &amp; Connect</button>
             </div>
           </form>
         </div>
