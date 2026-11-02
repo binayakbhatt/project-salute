@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 // PASTE YOUR CLOUDFLARE WORKER URL INSIDE THE QUOTES BELOW (OPTIONAL)
 // Example: 'https://project-salute-api.yourname.workers.dev'
 // ============================================================================
-const DEFAULT_D1_API_URL = '';
+const DEFAULT_D1_API_URL = 'https://project-salute-api.binayaksinbox.workers.dev';
 
 const SCHEMES = {
   pli_santosh: {
@@ -594,7 +594,7 @@ export default function App() {
                   <div className="bg-slate-900 text-white p-4 rounded-xl space-y-1">
                     <span className="text-xs font-black uppercase text-yellow-300">PLI / RPLI TDS Rule (Sec 194DA)</span>
                     <p className="text-[11px] text-slate-300">
-                      Regular Maturity is 100% Tax-Free u/s 10(10D) (₹0 TDS). Premature surrender (<5 yrs) ≥ ₹1L attracts 5% TDS on gain (Est: ₹{metrics.earlySurrenderTdsAmt.toLocaleString('en-IN')}). Policy Loan = ₹0 TDS.
+                      Regular Maturity is 100% Tax-Free u/s 10(10D) (₹0 TDS). Premature surrender (under 5 yrs) ≥ ₹1L attracts 5% TDS on gain (Est: ₹{metrics.earlySurrenderTdsAmt.toLocaleString('en-IN')}). Policy Loan = ₹0 TDS.
                     </p>
                   </div>
                 </div>
@@ -655,7 +655,7 @@ export default function App() {
               <h3 className="text-lg font-black text-slate-800 mb-4">Standalone India Post POSB Schemes (Separate from Xonchoyor Xopun)</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                 {[
-                  { name: 'Sukanya Samriddhi Yojana (SSY)', rate: '8.2% p.a. (Tax-Free)', desc: 'Girl child (<10 yrs) education & marriage. 100% Tax-Free.' },
+                  { name: 'Sukanya Samriddhi Yojana (SSY)', rate: '8.2% p.a. (Tax-Free)', desc: 'Girl child (under 10 yrs) education & marriage. 100% Tax-Free.' },
                   { name: 'Senior Citizens Savings Scheme (SCSS)', rate: '8.2% p.a.', desc: 'Quarterly guaranteed pension flow for retiring personnel.' },
                   { name: 'Monthly Income Scheme (MIS)', rate: '7.4% p.a.', desc: 'Guaranteed monthly cashflow up to ₹9L (Single) / ₹15L (Joint).' },
                   { name: 'Public Provident Fund (PPF)', rate: '7.1% p.a. (EEE)', desc: '15-year tax-free compounding with zero TDS.' },
