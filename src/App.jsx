@@ -404,12 +404,7 @@ export default function App() {
                   <li>• <strong>Defence &amp; CAPF Units:</strong> Army, CRPF, and Assam Rifles personnel deployed in the region.</li>
                 </ul>
               </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-                <h3 className="text-base font-black text-slate-900">Administrative Network &amp; Sub Offices</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Overseeing operations across Dhemaji MDG, Jonai SO, Bardoloni SO, Simen Chapori SO, Machkhowa SO, Sissirborgaon SO, Silapathar SO, Telam BO, Lakhipathar BO, Sripani, and Akajan Bormuria BO.
-                </p>
-              </div>
+              
             </div>
           </div>
         )}
