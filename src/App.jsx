@@ -346,13 +346,7 @@ export default function App() {
               <span className={`w-2 h-2 rounded-full ${syncStatus === 'online' ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'}`}></span>
               <span>Sync</span>
             </button>
-            <button
-              onClick={() => setShowD1Modal(true)}
-              className="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-full border border-white/20 font-bold"
-              title="Configure Database URL"
-            >
-              ⚙
-            </button>
+            
           </div>
         </div>
       </header>
