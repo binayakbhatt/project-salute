@@ -424,7 +424,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Sum Assured: ₹{calcSa.toLocaleString('en-IN')}</label>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Sum Assured: ₹{Number(calcSa ?? 0).toLocaleString('en-IN')}</label>
                   <select value={calcSa} onChange={(e) => setCalcSa(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
                     <option value={200000}>₹2,00,000</option>
                     <option value={500000}>₹5,00,000</option>
@@ -447,7 +447,7 @@ export default function App() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                   <div className="bg-red-50 p-3.5 rounded-xl border border-red-200">
                     <span className="font-bold text-red-700 uppercase block">Est. Monthly Deposit</span>
-                    <div className="text-xl font-black text-red-900 mt-1">₹{metrics.monthlyPremium.toLocaleString('en-IN')}</div>
+                    <div className="text-xl font-black text-red-900 mt-1">₹{Number(metrics?.monthlyPremium ?? 0).toLocaleString('en-IN')}</div>
                   </div>
                   <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200">
                     <span className="font-bold text-emerald-700 uppercase block">Total Maturity</span>
@@ -465,8 +465,8 @@ export default function App() {
 
                 <div className="bg-slate-100 p-3.5 rounded-xl border border-slate-200">
                   <div className="flex justify-between text-xs font-bold text-slate-700 mb-1.5">
-                    <span>Total Invested: ₹{metrics.totalInvested.toLocaleString('en-IN')}</span>
-                    <span className="text-emerald-700">Maturity: ₹{metrics.totalMaturity.toLocaleString('en-IN')}</span>
+                    <span>Total Invested: ₹{Number(metrics?.totalInvested ?? 0).toLocaleString('en-IN')}</span>
+                    <span className="text-emerald-700">Maturity: ₹{Number(metrics?.totalMaturity ?? 0).toLocaleString('en-IN')}</span>
                   </div>
                   <div className="w-full bg-slate-300 h-3 rounded-full overflow-hidden flex">
                     <div className="bg-slate-600 h-full" style={{ width: `${investedPct}%` }}></div>
@@ -477,8 +477,8 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-1">
                     <span className="font-black uppercase text-amber-900 block">3-Year Loan Eligibility (90% Surrender Value)</span>
-                    <div className="text-2xl font-black text-amber-950">≈ ₹{metrics.loan3Yr.toLocaleString('en-IN')}</div>
-                    <p className="text-[11px] text-amber-800">5-Yr Loan Eligibility: ≈ ₹{metrics.loan5Yr.toLocaleString('en-IN')}</p>
+                    <div className="text-2xl font-black text-amber-950">≈ ₹{Number(metrics?.loan3Yr ?? 0).toLocaleString('en-IN')}</div>
+                    <p className="text-[11px] text-amber-800">5-Yr Loan Eligibility: ≈ ₹{Number(metrics?.loan5Yr ?? 0).toLocaleString('en-IN')}</p>
                   </div>
                   <div className="bg-slate-900 text-white p-4 rounded-xl space-y-1">
                     <span className="font-black uppercase text-yellow-300 block">PLI / RPLI TDS Rule (Sec 194DA)</span>
