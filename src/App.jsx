@@ -1,15 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { generatePDFQuote } from './utils/pdfGenerator';
+import { PLI_SCHEMES, calculatePLIMetrics } from './utils/pliCalculator';
 
-const DEFAULT_D1_API_URL = 'https://project-salute-api.binayaksinbox.workers.dev';
 const XONCHOYOR_XOPUN_PORTAL = 'https://binayakbhatt.github.io/sanchayer_sopno/';
-
-const SCHEMES = {
-  pli_santosh: { id: 'pli_santosh', name: 'PLI Santosh (Endowment Assurance)', quota: 'PLI', bonus: 52 },
-  pli_suraksha: { id: 'pli_suraksha', name: 'PLI Suraksha (Whole Life Assurance)', quota: 'PLI', bonus: 76 },
-  rpli_santosh: { id: 'rpli_santosh', name: 'RPLI Gram Santosh (Endowment)', quota: 'RPLI', bonus: 48 },
-  rpli_suraksha: { id: 'rpli_suraksha', name: 'RPLI Gram Suraksha (Whole Life)', quota: 'RPLI', bonus: 60 },
-};
 
 const POSB_PORTFOLIO = [
   { id: 'sb', name: 'Post Office Savings Account (SB)', rate: '4.0% p.a.', tenure: 'Liquid', highlight: 'Sovereign salary/savings account with NEFT/RTGS & NACH auto-debit.' },
@@ -46,49 +39,19 @@ const DHEMAJI_FACILITIES = [
   'Other Sub-Centre / Institution'
 ];
 
-function sanitizeInput(str) {
-  return String(str || '').replace(/[<>]/g, '').trim();
+function fmt(val) {
+  return Number(val ?? 0).toLocaleString('en-IN');
 }
 
-function calculatePLIMetrics(schemeKey, sa, age, term) {
-  const scheme = SCHEMES[schemeKey] || SCHEMES.pli_santosh;
-  const units = sa / 1000;
-  const annualRate = Math.max(18, (1000 / term) * 0.86 + Math.max(0, age - 25) * 0.42 + (scheme.quota === 'RPLI' ? 2.1 : 0));
-  const monthlyPremium = Math.round((units * annualRate) / 12);
-  const annualPremium = monthlyPremium * 12;
-  const totalInvested = annualPremium * term;
-
-  const annualBonus = units * scheme.bonus;
-  const totalBonus = annualBonus * term;
-  const terminalBonus = term >= 20 ? Math.min(1000, Math.round((sa / 10000) * 20)) : 0;
-  const totalMaturity = sa + totalBonus + terminalBonus;
-  const netProfit = totalMaturity - totalInvested;
-  const multiplier = totalInvested > 0 ? (totalMaturity / totalInvested).toFixed(2) : '0.00';
-  const roiPct = totalInvested > 0 ? Math.round((netProfit / totalInvested) * 100) : 0;
-
-  const paidUp3 = sa * (3 / term);
-  const svFactor3 = Math.min(0.85, Math.max(0.32, 0.88 - Math.max(1, term - 3) * 0.024));
-  const sv3 = Math.round(paidUp3 * svFactor3);
-  const loan3 = Math.round(sv3 * 0.9);
-
-  const paidUp5 = sa * (5 / term);
-  const sv5 = Math.round((paidUp5 + annualBonus * 5) * Math.min(0.88, Math.max(0.36, 0.90 - Math.max(1, term - 5) * 0.022)));
-  const loan5 = Math.round(sv5 * 0.9);
-
-  const surrenderTds = sv3 >= 100000 && sv3 > annualPremium * 3 ? Math.round((sv3 - annualPremium * 3) * 0.05) : 0;
-
-  return {
-    scheme, monthlyPremium, annualPremium, totalInvested, annualBonus, totalBonus, terminalBonus,
-    totalMaturity, netProfit, multiplier, roiPct, sv3, loan3, loan5, surrenderTds, maturityAge: age + term,
-  };
+function sanitizeInput(str) {
+  return String(str || '').replace(/[<>]/g, '').trim();
 }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('pitch');
   const [leads, setLeads] = useState([]);
-  const [d1Url, setD1Url] = useState(() => localStorage.getItem('salute_d1_url') || DEFAULT_D1_API_URL);
+  const [d1Url, setD1Url] = useState(() => localStorage.getItem('salute_d1_url') || 'https://project-salute-api.binayaksinbox.workers.dev');
   const [syncStatus, setSyncStatus] = useState('offline');
-  const [showD1Modal, setShowD1Modal] = useState(false);
   const [toast, setToast] = useState(null);
 
   const [calcScheme, setCalcScheme] = useState('pli_santosh');
@@ -97,9 +60,15 @@ export default function App() {
   const [calcTerm, setCalcTerm] = useState(20);
   const [xxMonthly, setXxMonthly] = useState(5000);
 
-  const [tdsScheme, setTdsScheme] = useState('scss');
-  const [tdsPrincipal, setTdsPrincipal] = useState(1000000);
-  const [tdsOpts, setTdsOpts] = useState({ form15g: true, splitCif: true, divertPli: false });
+  // TDS Planner State
+  const [tdsCategory, setTdsCategory] = useState('posb'); // 'posb' | 'pli'
+  const [posbScheme, setPosbScheme] = useState('scss');
+  const [posbPrincipal, setPosbPrincipal] = useState(1000000);
+  const [posbOpts, setPosbOpts] = useState({ form15g: true, splitCif: true, divertPli: false });
+
+  const [pliSurrenderVal, setPliSurrenderVal] = useState(250000);
+  const [pliTotalPremiumsPaid, setPliTotalPremiumsPaid] = useState(180000);
+  const [pliPolicyAgeYears, setPliPolicyAgeYears] = useState(3);
 
   const [formData, setFormData] = useState({
     name: '', phone: '', segment: 'Assam Police & Battalions', dept: 'Dhemaji Civil Hospital',
@@ -162,7 +131,7 @@ export default function App() {
   const handleSyncD1 = async () => {
     const clean = d1Url.replace(/\/+$/, '');
     if (!clean) {
-      setShowD1Modal(true);
+      notify('Please configure your database URL.', 'error');
       return;
     }
     setSyncStatus('syncing');
@@ -293,16 +262,22 @@ export default function App() {
     notify('Leads exported as CSV successfully!');
   };
 
+  // POSB TDS Math (Sec 194A)
   const posbRates = { scss: 0.082, mis: 0.074, td5yr: 0.075, td1yr: 0.069 };
-  const rate = posbRates[tdsScheme] || 0.082;
-  const principal = tdsOpts.divertPli ? tdsPrincipal * 0.7 : tdsPrincipal;
-  const perCif = tdsOpts.splitCif ? principal / 2 : principal;
-  const annualInt = Math.round(perCif * rate);
-  const threshold = tdsScheme === 'scss' ? 50000 : 40000;
-  const rawTds = annualInt > threshold ? Math.round(annualInt * 0.1) : 0;
-  const netTds = tdsOpts.form15g ? 0 : rawTds;
+  const posbRate = posbRates[posbScheme] || 0.082;
+  const effectivePrincipal = posbOpts.divertPli ? posbPrincipal * 0.7 : posbPrincipal;
+  const perCifPrincipal = posbOpts.splitCif ? effectivePrincipal / 2 : effectivePrincipal;
+  const annualPosbInterest = Math.round(perCifPrincipal * posbRate);
+  const posbThreshold = posbScheme === 'scss' ? 50000 : 40000;
+  const rawPosbTds = annualPosbInterest > posbThreshold ? Math.round(annualPosbInterest * 0.1) : 0;
+  const netPosbTds = posbOpts.form15g ? 0 : rawPosbTds;
 
-  const xxPrincipal = xxMonthly * 12;
+  // PLI / RPLI TDS Math (Sec 194DA & Sec 10(10D))
+  const isPliEarlySurrender = Number(pliPolicyAgeYears) < 5;
+  const pliNetGain = Math.max(0, Number(pliSurrenderVal) - Number(pliTotalPremiumsPaid));
+  const pliTdsApplicable = isPliEarlySurrender && Number(pliSurrenderVal) >= 100000 && pliNetGain > 0;
+  const calculatedPliTds = pliTdsApplicable ? Math.round(pliNetGain * 0.05) : 0;
+
   const xxMonthlyPayout = Math.round(xxMonthly * 1.0708);
   const xxTotalAnnual = xxMonthlyPayout * 12;
 
@@ -341,12 +316,11 @@ export default function App() {
           <div className="flex items-center space-x-2">
             <button
               onClick={handleSyncD1}
-              className="text-xs bg-red-950 hover:bg-red-900 px-3.5 py-1.5 rounded-full border border-red-400/40 flex items-center space-x-2 cursor-pointer transition font-bold"
+              className="text-xs bg-red-950 hover:bg-red-900 px-4 py-1.5 rounded-full border border-red-400/40 flex items-center space-x-2 cursor-pointer transition font-bold"
             >
               <span className={`w-2 h-2 rounded-full ${syncStatus === 'online' ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'}`}></span>
               <span>Sync</span>
             </button>
-            
           </div>
         </div>
       </header>
@@ -354,12 +328,12 @@ export default function App() {
       <nav className="bg-white border-b border-slate-200 shadow-xs sticky top-[62px] z-40">
         <div className="max-w-7xl mx-auto px-4 flex overflow-x-auto space-x-4">
           {[
-            { id: 'pitch', label: '1. Campaign Pitch & Segments' },
-            { id: 'calculator', label: '2. PLI/RPLI ROI & 3-Yr Loan Calc' },
+            { id: 'pitch', label: '1. Campaign Pitch & Strategy' },
+            { id: 'calculator', label: '2. PLI & RPLI Calculator' },
             { id: 'xonchoyor', label: '3. Xonchoyor Xopun & POSB' },
-            { id: 'capture', label: '4. Shift-Change Lead Capture & PDF' },
+            { id: 'capture', label: '4. Lead Capture' },
             { id: 'crm', label: `5. Captured Leads CRM (${leads.length})` },
-            { id: 'tds', label: '6. POSB & PLI TDS Planner' },
+            { id: 'tds', label: '6. TDS Calculator' },
             { id: 'sop', label: '7. Competent Authority SOP' },
           ].map((t) => (
             <button
@@ -382,58 +356,187 @@ export default function App() {
               <span className="text-[11px] bg-amber-400 text-slate-950 font-extrabold px-3 py-1 rounded-full uppercase">
                 India Post — Dhemaji Sub Division (Lakhimpur Postal Division)
               </span>
-              <h2 className="text-2xl sm:text-3xl font-black">Project SALUTE: Financial Security for Those Who Serve and Care</h2>
+              <h2 className="text-2xl sm:text-3xl font-black">Project SALUTE: Campaign Strategy &amp; Customer Pitch Manual</h2>
               <p className="text-xs sm:text-sm text-red-100 max-w-4xl leading-relaxed">
-                Tailored exclusively for Assam Police &amp; Battalions, Fire &amp; Emergency Services, Healthcare Professionals, and Defence/CAPF across Dhemaji District. Built upon four life-stage pillars: <strong>PROTECT</strong> (PLI Santosh/Suraksha &amp; RPLI Gram Santosh), <strong>SAVE</strong> (Xonchoyor Xopun Monthly 1-Yr TD Ladder &amp; POSB), <strong>NURTURE</strong> (SSY for girl child), and <strong>RETIRE</strong> (SCSS &amp; MIS).
+                Comprehensive field operating manual for Branch Postmasters (BPM), Sub Postmasters (SPM), and Marketing Executives (ME) across Dhemaji Sub Division. Detailed below are the official scheme summaries, tailored pitching scripts for each uniformed and emergency service segment, and optimal cross-selling product pairings.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-                <h3 className="text-base font-black text-slate-900">Target Service Segments in Dhemaji</h3>
-                <ul className="text-xs text-slate-700 space-y-2">
-                  <li>• <strong>Assam Police &amp; Battalions:</strong> District Executive Force, Armed/IR/Commando Battalions stationed across Dhemaji &amp; Jonai.</li>
-                  <li>• <strong>Fire &amp; Emergency Services:</strong> First responders stationed at Dhemaji and Silapathar fire stations.</li>
-                  <li>• <strong>Healthcare Professionals:</strong> Doctors, nurses, and medical staff at Dhemaji Civil Hospital, CHCs, and PHCs.</li>
-                  <li>• <strong>Defence &amp; CAPF Units:</strong> Army, CRPF, and Assam Rifles personnel deployed in the region.</li>
-                </ul>
+            {/* Elaborated Four Life-Stage Pillars */}
+            <div className="space-y-3">
+              <h3 className="text-base font-black text-slate-900">Four Core Sovereign Financial Pillars</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+                  <div className="w-8 h-8 rounded-xl bg-red-100 text-red-700 flex items-center justify-center font-black text-xs">01</div>
+                  <h4 className="font-black text-slate-900 text-sm">PROTECT</h4>
+                  <span className="text-[10px] bg-red-50 text-red-700 font-bold px-2 py-0.5 rounded uppercase">PLI &amp; RPLI</span>
+                  <p className="text-xs text-slate-600 leading-relaxed pt-1">
+                    High-bonus Postal Life Insurance (PLI Santosh/Suraksha) and Rural PLI (Gram Santosh) offering up to ₹50 Lakh sovereign cover, high bonuses (₹52–₹76 per ₹1,000 SA), 3-year loan eligibility, and tax-free maturity under Sec 10(10D).
+                  </p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">02</div>
+                  <h4 className="font-black text-slate-900 text-sm">SAVE</h4>
+                  <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded uppercase">Xonchoyor Xopun &amp; TD</span>
+                  <p className="text-xs text-slate-600 leading-relaxed pt-1">
+                    Our custom <strong>Xonchoyor Xopun</strong> (Monthly 1-Year Time Deposit Ladder) and POSB schemes (SB, RD, 1–5 Yr TD) providing disciplined recurring savings and guaranteed monthly liquidity from Month 13 onwards (~7.08% effective yield).
+                  </p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">03</div>
+                  <h4 className="font-black text-slate-900 text-sm">NURTURE</h4>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded uppercase">Sukanya Samriddhi</span>
+                  <p className="text-xs text-slate-600 leading-relaxed pt-1">
+                    Empowering daughters of service personnel through <strong>Sukanya Samriddhi Yojana (SSY)</strong>, delivering top-tier sovereign interest (8.2% p.a.) with 100% tax-free EEE status for higher education and marriage security.
+                  </p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black text-xs">04</div>
+                  <h4 className="font-black text-slate-900 text-sm">RETIRE</h4>
+                  <span className="text-[10px] bg-amber-50 text-amber-800 font-bold px-2 py-0.5 rounded uppercase">SCSS &amp; MIS</span>
+                  <p className="text-xs text-slate-600 leading-relaxed pt-1">
+                    Post-retirement financial independence through <strong>Senior Citizens Savings Scheme (SCSS)</strong> (8.2% quarterly payout) and <strong>Monthly Income Scheme (MIS)</strong> (7.4% monthly pension) with Section 194A TDS optimization.
+                  </p>
+                </div>
               </div>
+            </div>
+
+            {/* Customer Segments, Pitching Strategy & Cross-Selling Matrix */}
+            <div className="space-y-4">
+              <h3 className="text-base font-black text-slate-900">Customer Segments, Staff Pitching Scripts &amp; Cross-Selling Matrix</h3>
               
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Segment 1 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <h4 className="font-black text-slate-900 text-sm">1. Assam Police &amp; Police Battalions</h4>
+                    <span className="text-[10px] bg-red-100 text-red-800 font-bold px-2.5 py-0.5 rounded-full">High Priority</span>
+                  </div>
+                  <p className="text-xs text-slate-600"><strong>Locations:</strong> SP Office Dhemaji, Police Lines, Jonai, and Armed/IR/Commando Battalions.</p>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                    <div><strong>Primary Product:</strong> PLI Santosh (Endowment Assurance) / Suraksha (Whole Life).</div>
+                    <div><strong>Secondary Cross-Sell Product:</strong> Xonchoyor Xopun (Monthly 1-Yr TD Ladder) or Sukanya Samriddhi Yojana (SSY).</div>
+                    <div><strong>Staff Pitching Strategy:</strong> Emphasize 100% sovereign guarantee, high bonuses (₹52–₹76/1K SA), and the 3-year emergency loan facility (90% of surrender value) which provides immediate liquidity without policy surrender or tax penalty.</div>
+                  </div>
+                </div>
+
+                {/* Segment 2 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <h4 className="font-black text-slate-900 text-sm">2. Fire &amp; Emergency Services</h4>
+                    <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2.5 py-0.5 rounded-full">First Responders</span>
+                  </div>
+                  <p className="text-xs text-slate-600"><strong>Locations:</strong> Dhemaji Fire Station &amp; Silapathar Fire Station.</p>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                    <div><strong>Primary Product:</strong> PLI Suraksha (Whole Life Assurance) for maximum risk cover.</div>
+                    <div><strong>Secondary Cross-Sell Product:</strong> 5-Year Recurring Deposit (RD) or National Savings Certificate (NSC).</div>
+                    <div><strong>Staff Pitching Strategy:</strong> Highlight risk-heavy duty nature. Position Suraksha as high-security family protection with high bonuses and tax-free death/maturity claims under Section 10(10D).</div>
+                  </div>
+                </div>
+
+                {/* Segment 3 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <h4 className="font-black text-slate-900 text-sm">3. Healthcare Professionals</h4>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full">Medical Staff</span>
+                  </div>
+                  <p className="text-xs text-slate-600"><strong>Locations:</strong> Dhemaji Civil Hospital, Jt. DHS Office, Silapathar Model Hospital, CHCs &amp; PHCs.</p>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                    <div><strong>Primary Product:</strong> PLI Santosh (High Sum Assured up to ₹50 Lakhs).</div>
+                    <div><strong>Secondary Cross-Sell Product:</strong> Post Office Monthly Income Scheme (MIS) or Public Provident Fund (PPF).</div>
+                    <div><strong>Staff Pitching Strategy:</strong> Focus on tax planning (Section 80C deduction and tax-free Section 10(10D) returns), wealth accumulation, and professional financial security.</div>
+                  </div>
+                </div>
+
+                {/* Segment 4 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <h4 className="font-black text-slate-900 text-sm">4. Defence &amp; CAPF Units</h4>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2.5 py-0.5 rounded-full">Central Forces</span>
+                  </div>
+                  <p className="text-xs text-slate-600"><strong>Locations:</strong> Army, CRPF, and Assam Rifles deployments across Dhemaji and Jonai sub-division.</p>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                    <div><strong>Primary Product:</strong> RPLI Gram Santosh / PLI Suraksha.</div>
+                    <div><strong>Secondary Cross-Sell Product:</strong> Kisan Vikas Patra (KVP) or Senior Citizens Savings Scheme (SCSS) for parents.</div>
+                    <div><strong>Staff Pitching Strategy:</strong> Stress hassle-free assignment of policy, centralized postal network service across India, and guaranteed sovereign returns unaffected by equity market volatility.</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'calculator' && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
-            <h2 className="text-lg font-black text-slate-800 mb-1">Official PLI &amp; RPLI Wealth-Doubler &amp; 3-Year Loan Calculator</h2>
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-2 pb-3 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-black text-slate-800">Official India Post PLI &amp; RPLI Calculator</h2>
+                <p className="text-xs text-slate-500">Includes all official schemes: Suraksha, Santosh, Suvidha, Sumangal, Yugal Suraksha, Children Policy, and RPLI variants.</p>
+              </div>
+              <a href="https://www.indiapost.gov.in/insurance-services/pli" target="_blank" rel="noopener noreferrer" className="text-xs bg-red-50 text-red-700 font-bold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-100 transition">
+                India Post Official PLI Portal ↗
+              </a>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Select Quota &amp; Plan</label>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Select Scheme</label>
                   <select value={calcScheme} onChange={(e) => setCalcScheme(e.target.value)} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
-                    <option value="pli_santosh">PLI Santosh (Endowment - ₹52 Bonus)</option>
-                    <option value="pli_suraksha">PLI Suraksha (Whole Life - ₹76 Bonus)</option>
-                    <option value="rpli_santosh">RPLI Gram Santosh (Endowment - ₹48 Bonus)</option>
-                    <option value="rpli_suraksha">RPLI Gram Suraksha (Whole Life - ₹60 Bonus)</option>
+                    <optgroup label="Postal Life Insurance (PLI)">
+                      {Object.entries(PLI_SCHEMES).filter(([k]) => k.startsWith('pli_')).map(([k, s]) => (
+                        <option key={k} value={k}>{s.name} (Bonus ₹{s.bonusPerThousand}/1K)</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Rural Postal Life Insurance (RPLI)">
+                      {Object.entries(PLI_SCHEMES).filter(([k]) => k.startsWith('rpli_')).map(([k, s]) => (
+                        <option key={k} value={k}>{s.name} (Bonus ₹{s.bonusPerThousand}/1K)</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Sum Assured: ₹{Number(calcSa ?? 0).toLocaleString('en-IN')}</label>
-                  <select value={calcSa} onChange={(e) => setCalcSa(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
-                    <option value={200000}>₹2,00,000</option>
-                    <option value={500000}>₹5,00,000</option>
-                    <option value={1000000}>₹10,00,000</option>
-                    <option value={2000000}>₹20,00,000</option>
-                    <option value={5000000}>₹50,00,000</option>
-                  </select>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
+                    Sum Assured (₹): <span className="text-red-700 font-black">₹{fmt(calcSa)}</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="50000"
+                    min={PLI_SCHEMES[calcScheme].minSa}
+                    max={PLI_SCHEMES[calcScheme].maxSa}
+                    value={calcSa}
+                    onChange={(e) => setCalcSa(Math.max(PLI_SCHEMES[calcScheme].minSa, Math.min(PLI_SCHEMES[calcScheme].maxSa, Number(e.target.value) || 0)))}
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-black text-red-800"
+                    placeholder="Enter Sum Assured"
+                  />
+                  <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {[100000, 300000, 500000, 1000000, 2000000, 5000000].map((amt) => (
+                      amt <= PLI_SCHEMES[calcScheme].maxSa && amt >= PLI_SCHEMES[calcScheme].minSa && (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setCalcSa(amt)}
+                          className={`text-[10px] px-2 py-1 rounded font-bold transition ${calcSa === amt ? 'bg-red-700 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                        >
+                          ₹{amt >= 100000 ? `${amt / 100000}L` : `${amt / 1000}K`}
+                        </button>
+                      )
+                    ))}
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Entry Age: {calcAge} Years</label>
-                  <input type="range" min="19" max="50" value={calcAge} onChange={(e) => setCalcAge(Number(e.target.value))} className="w-full accent-red-700 cursor-pointer" />
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Entry Age: <span className="text-red-700 font-black">{calcAge} Years</span></label>
+                  <input type="range" min={PLI_SCHEMES[calcScheme].minAge} max={PLI_SCHEMES[calcScheme].maxAge} value={calcAge} onChange={(e) => setCalcAge(Number(e.target.value))} className="w-full accent-red-700 cursor-pointer" />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Policy Term: {calcTerm} Years</label>
-                  <input type="range" min="10" max="30" value={calcTerm} onChange={(e) => setCalcTerm(Number(e.target.value))} className="w-full accent-red-700 cursor-pointer" />
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Policy Term: <span className="text-red-700 font-black">{calcTerm} Years</span> (Matures at Age {metrics.maturityAge})</label>
+                  <input type="range" min="5" max="35" value={calcTerm} onChange={(e) => setCalcTerm(Number(e.target.value))} className="w-full accent-red-700 cursor-pointer" />
                 </div>
               </div>
 
@@ -441,15 +544,15 @@ export default function App() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                   <div className="bg-red-50 p-3.5 rounded-xl border border-red-200">
                     <span className="font-bold text-red-700 uppercase block">Est. Monthly Deposit</span>
-                    <div className="text-xl font-black text-red-900 mt-1">₹{Number(metrics?.monthlyPremium ?? 0).toLocaleString('en-IN')}</div>
+                    <div className="text-xl font-black text-red-900 mt-1">₹{fmt(metrics.monthlyPremium)}</div>
                   </div>
                   <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200">
                     <span className="font-bold text-emerald-700 uppercase block">Total Maturity</span>
-                    <div className="text-xl font-black text-emerald-900 mt-1">₹{metrics.totalMaturity.toLocaleString('en-IN')}</div>
+                    <div className="text-xl font-black text-emerald-900 mt-1">₹{fmt(metrics.totalMaturity)}</div>
                   </div>
                   <div className="bg-blue-50 p-3.5 rounded-xl border border-blue-200">
                     <span className="font-bold text-blue-700 uppercase block">Net Profit</span>
-                    <div className="text-xl font-black text-blue-900 mt-1">₹{metrics.netProfit.toLocaleString('en-IN')}</div>
+                    <div className="text-xl font-black text-blue-900 mt-1">₹{fmt(metrics.netProfit)}</div>
                   </div>
                   <div className="bg-purple-50 p-3.5 rounded-xl border border-purple-200">
                     <span className="font-bold text-purple-700 uppercase block">Multiplier</span>
@@ -459,8 +562,8 @@ export default function App() {
 
                 <div className="bg-slate-100 p-3.5 rounded-xl border border-slate-200">
                   <div className="flex justify-between text-xs font-bold text-slate-700 mb-1.5">
-                    <span>Total Invested: ₹{Number(metrics?.totalInvested ?? 0).toLocaleString('en-IN')}</span>
-                    <span className="text-emerald-700">Maturity: ₹{Number(metrics?.totalMaturity ?? 0).toLocaleString('en-IN')}</span>
+                    <span>Total Invested: ₹{fmt(metrics.totalInvested)}</span>
+                    <span className="text-emerald-700">Maturity: ₹{fmt(metrics.totalMaturity)}</span>
                   </div>
                   <div className="w-full bg-slate-300 h-3 rounded-full overflow-hidden flex">
                     <div className="bg-slate-600 h-full" style={{ width: `${investedPct}%` }}></div>
@@ -469,14 +572,21 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-1">
-                    <span className="font-black uppercase text-amber-900 block">3-Year Loan Eligibility (90% Surrender Value)</span>
-                    <div className="text-2xl font-black text-amber-950">≈ ₹{Number(metrics?.loan3Yr ?? 0).toLocaleString('en-IN')}</div>
-                    <p className="text-[11px] text-amber-800">5-Yr Loan Eligibility: ≈ ₹{Number(metrics?.loan5Yr ?? 0).toLocaleString('en-IN')}</p>
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-1.5">
+                    <span className="font-black uppercase text-amber-950 block text-sm">3-Year &amp; 5-Year Loan Eligibility</span>
+                    <div className="text-xl font-black text-amber-900">
+                      3-Yr Loan: ₹{fmt(metrics.loanEligible3Yr)}
+                    </div>
+                    <p className="text-[11px] text-amber-800">
+                      • 3-Yr Surrender Value: ₹{fmt(metrics.surrenderValue3Yr)} (90% loan = ₹{fmt(metrics.loanEligible3Yr)})<br />
+                      • 5-Yr Loan (with bonus): <strong>₹{fmt(metrics.loanEligible5Yr)}</strong>
+                    </p>
                   </div>
-                  <div className="bg-slate-900 text-white p-4 rounded-xl space-y-1">
+                  <div className="bg-slate-900 text-white p-4 rounded-xl space-y-1.5">
                     <span className="font-black uppercase text-yellow-300 block">PLI / RPLI TDS Rule (Sec 194DA)</span>
-                    <p className="text-[11px] text-slate-300">Regular Maturity = 100% Tax-Free (₹0 TDS). Policy Loan = ₹0 TDS.</p>
+                    <p className="text-[11px] text-slate-300">
+                      Regular Maturity = 100% Tax-Free u/s 10(10D) (₹0 TDS). Early surrender (&lt;5 yrs) &ge; ₹1L has 5% TDS on gain (Est: ₹{fmt(metrics.surrenderTds)}). Taking a 90% Policy Loan = <strong>₹0 TDS</strong>!
+                    </p>
                   </div>
                 </div>
               </div>
@@ -501,7 +611,7 @@ export default function App() {
                 <div className="bg-white/10 p-3.5 rounded-xl border border-white/10">
                   <label className="block text-amber-300 font-bold uppercase mb-1">Monthly 1-Yr TD Deposit</label>
                   <select value={xxMonthly} onChange={(e) => setXxMonthly(Number(e.target.value))} className="w-full p-2 bg-slate-900 text-white rounded-lg font-bold">
-                    <option value={2000}>₹2,000 / mo</option>
+                    <option value={2000}>₹2,00,000 / mo</option>
                     <option value={5000}>₹5,000 / mo</option>
                     <option value={10000}>₹10,000 / mo</option>
                     <option value={20000}>₹20,000 / mo</option>
@@ -509,11 +619,11 @@ export default function App() {
                 </div>
                 <div className="bg-white/10 p-3.5 rounded-xl border border-white/10">
                   <span className="text-slate-300 font-bold uppercase block">Month 13+ Monthly Payout</span>
-                  <div className="text-xl font-black text-emerald-400 mt-1">₹{xxMonthlyPayout.toLocaleString('en-IN')} / mo</div>
+                  <div className="text-xl font-black text-emerald-400 mt-1">₹{fmt(Math.round(xxMonthly * 1.0708))} / mo</div>
                 </div>
                 <div className="bg-white/10 p-3.5 rounded-xl border border-white/10">
                   <span className="text-slate-300 font-bold uppercase block">Total Annual Payout</span>
-                  <div className="text-xl font-black text-amber-300 mt-1">₹{xxTotalAnnual.toLocaleString('en-IN')} / yr</div>
+                  <div className="text-xl font-black text-amber-300 mt-1">₹{fmt(Math.round(xxMonthly * 1.0708) * 12)} / yr</div>
                 </div>
               </div>
             </div>
@@ -554,10 +664,9 @@ export default function App() {
               <div>
                 <label className="block font-bold uppercase text-slate-700 mb-1">Primary PLI / RPLI Plan *</label>
                 <select value={formData.product} onChange={(e) => setFormData({ ...formData, product: e.target.value })} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
-                  <option value="PLI Santosh (Endowment Assurance)">PLI Santosh (Endowment)</option>
-                  <option value="PLI Suraksha (Whole Life Assurance)">PLI Suraksha (Whole Life)</option>
-                  <option value="RPLI Gram Santosh (Endowment)">RPLI Gram Santosh</option>
-                  <option value="RPLI Gram Suraksha (Whole Life)">RPLI Gram Suraksha</option>
+                  {Object.values(PLI_SCHEMES).map((s) => (
+                    <option key={s.id} value={`${s.category} ${s.name}`}>{s.category} {s.name}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -638,37 +747,119 @@ export default function App() {
         )}
 
         {activeTab === 'tds' && (
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-            <h2 className="text-xl font-black text-slate-800">POSB Section 194A &amp; PLI Section 194DA TDS Reduction Planner</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
-                <div>
-                  <label className="block font-bold uppercase text-slate-700 mb-1">Select POSB Scheme</label>
-                  <select value={tdsScheme} onChange={(e) => setTdsScheme(e.target.value)} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm">
-                    <option value="scss">Senior Citizens Savings Scheme (SCSS - 8.2%)</option>
-                    <option value="mis">Monthly Income Scheme (MIS - 7.4%)</option>
-                    <option value="td5yr">5-Year Time Deposit (7.5%)</option>
-                    <option value="td1yr">Xonchoyor Xopun / 1-Year TD (6.9%)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold uppercase text-slate-700 mb-1">Principal Amount (₹)</label>
-                  <input type="number" step="50000" value={tdsPrincipal} onChange={(e) => setTdsPrincipal(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm" />
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-100 p-3.5 rounded-xl">
-                    <span className="font-bold text-slate-600 uppercase block">Annual Interest</span>
-                    <div className="text-xl font-black mt-1">₹{annualInt.toLocaleString('en-IN')}</div>
-                  </div>
-                  <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200">
-                    <span className="font-bold text-emerald-700 uppercase block">Net TDS</span>
-                    <div className="text-xl font-black text-emerald-900 mt-1">₹{netTds.toLocaleString('en-IN')}</div>
-                  </div>
-                </div>
-              </div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+            <h2 className="text-xl font-black text-slate-800">TDS Calculator (POSB Sec 194A &amp; PLI/RPLI Sec 194DA)</h2>
+            <p className="text-xs text-slate-500">Calculate tax deducted at source (TDS) for POSB savings interest and PLI/RPLI surrender payouts in accordance with Income Tax rules.</p>
+
+            {/* Sub-toggle between POSB TDS and PLI TDS */}
+            <div className="flex space-x-2 border-b border-slate-200 pb-3">
+              <button
+                onClick={() => setTdsCategory('posb')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${tdsCategory === 'posb' ? 'bg-red-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                POSB Interest TDS (Sec 194A)
+              </button>
+              <button
+                onClick={() => setTdsCategory('pli')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${tdsCategory === 'pli' ? 'bg-red-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                PLI / RPLI Surrender TDS (Sec 194DA)
+              </button>
             </div>
+
+            {tdsCategory === 'posb' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                  <div>
+                    <label className="block font-bold uppercase text-slate-700 mb-1">Select POSB Scheme</label>
+                    <select value={posbScheme} onChange={(e) => setPosbScheme(e.target.value)} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm">
+                      <option value="scss">Senior Citizens Savings Scheme (SCSS - 8.2%)</option>
+                      <option value="mis">Monthly Income Scheme (MIS - 7.4%)</option>
+                      <option value="td5yr">5-Year Time Deposit (7.5%)</option>
+                      <option value="td1yr">Xonchoyor Xopun / 1-Year TD (6.9%)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase text-slate-700 mb-1">Principal Amount (₹)</label>
+                    <input type="number" step="50000" value={posbPrincipal} onChange={(e) => setPosbPrincipal(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div className="space-y-2 pt-2 border-t border-slate-200">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="checkbox" checked={posbOpts.form15g} onChange={(e) => setPosbOpts({ ...posbOpts, form15g: e.target.checked })} />
+                      <span><strong>Submit Form 15G / 15H:</strong> Reduces TDS to ₹0 if total income is below taxable limit.</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="checkbox" checked={posbOpts.splitCif} onChange={(e) => setPosbOpts({ ...posbOpts, splitCif: e.target.checked })} />
+                      <span><strong>Split Deposit Across Spouse CIF:</strong> Doubles the ₹40,000 / ₹50,000 Sec 194A threshold.</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="checkbox" checked={posbOpts.divertPli} onChange={(e) => setPosbOpts({ ...posbOpts, divertPli: e.target.checked })} />
+                      <span><strong>Divert 30% into Tax-Free PLI / PPF:</strong> Lowers taxable POSB interest base.</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-100 p-4 rounded-xl">
+                      <span className="font-bold text-slate-600 uppercase block">Annual Interest</span>
+                      <div className="text-xl font-black mt-1">₹{fmt(annualPosbInterest)}</div>
+                    </div>
+                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
+                      <span className="font-bold text-emerald-700 uppercase block">Net POSB TDS</span>
+                      <div className="text-xl font-black text-emerald-900 mt-1">₹{fmt(netPosbTds)}</div>
+                    </div>
+                  </div>
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-amber-900 space-y-1">
+                    <strong>Section 194A Rule Summary:</strong> TDS threshold is ₹50,000 for senior citizens (SCSS) and ₹40,000 for others. If interest exceeds threshold and Form 15G/15H is not submitted, 10% TDS is deducted.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                  <div>
+                    <label className="block font-bold uppercase text-slate-700 mb-1">Policy Duration (Years Active)</label>
+                    <select value={pliPolicyAgeYears} onChange={(e) => setPliPolicyAgeYears(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm">
+                      <option value={1}>1 Year (Early Surrender)</option>
+                      <option value={2}>2 Years (Early Surrender)</option>
+                      <option value={3}>3 Years (Early Surrender)</option>
+                      <option value={4}>4 Years (Early Surrender)</option>
+                      <option value={5}>5+ Years (Tax-Free Surrender)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase text-slate-700 mb-1">Total Surrender Payout Value (₹)</label>
+                    <input type="number" step="25000" value={pliSurrenderVal} onChange={(e) => setPliSurrenderVal(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase text-slate-700 mb-1">Total Premiums Paid (₹)</label>
+                    <input type="number" step="25000" value={pliTotalPremiumsPaid} onChange={(e) => setPliTotalPremiumsPaid(Number(e.target.value))} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-100 p-4 rounded-xl">
+                      <span className="font-bold text-slate-600 uppercase block">Net Surrender Gain</span>
+                      <div className="text-xl font-black mt-1">₹{fmt(pliNetGain)}</div>
+                    </div>
+                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
+                      <span className="font-bold text-emerald-700 uppercase block">Calculated PLI TDS</span>
+                      <div className="text-xl font-black text-emerald-900 mt-1">₹{fmt(calculatedPliTds)}</div>
+                    </div>
+                  </div>
+                  <div className="bg-slate-900 text-white p-4 rounded-xl space-y-1.5">
+                    <strong className="text-yellow-300">Section 194DA &amp; Sec 10(10D) Rule:</strong>
+                    <ul className="text-[11px] text-slate-300 space-y-1 list-disc pl-4">
+                      <li><strong>Regular Maturity / Death Claim:</strong> 100% exempt under Sec 10(10D) — <strong>₹0 TDS</strong>.</li>
+                      <li><strong>Early Surrender (&lt;5 Years):</strong> If payout is &ge; ₹1,00,000 and surrender value exceeds total premiums paid, 5% TDS applies on net gain.</li>
+                      <li><strong>Pro Tip:</strong> Taking a 90% Policy Loan instead of surrendering avoids premature termination and attracts <strong>₹0 TDS</strong>.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -681,18 +872,6 @@ export default function App() {
           </div>
         )}
       </main>
-
-      {showD1Modal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <form onSubmit={(e) => { e.preventDefault(); setShowD1Modal(false); fetchLeads(d1Url); }} className="bg-white p-6 rounded-2xl max-w-md w-full space-y-4 text-xs">
-            <h3 className="text-base font-black text-slate-900">Cloudflare D1 Worker Settings</h3>
-            <input type="url" value={d1Url} onChange={(e) => setD1Url(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-mono" />
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="submit" className="bg-red-700 text-white px-4 py-2 rounded-lg font-bold">Save URL</button>
-            </div>
-          </form>
-        </div>
-      )}
 
       <footer className="bg-slate-900 text-slate-400 py-6 mt-12 text-center text-xs space-y-1">
         <p className="font-bold text-slate-300">Project SALUTE — India Post, Dhemaji Sub Division (Lakhimpur Postal Division)</p>
