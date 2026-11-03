@@ -68,7 +68,7 @@ export default function App() {
 
   const [pliSurrenderVal, setPliSurrenderVal] = useState(250000);
   const [pliTotalPremiumsPaid, setPliTotalPremiumsPaid] = useState(180000);
-  const [pliPolicyAgeYears, setPliPolicyAgeYears] = useState(3);
+  const [pliPolicyAgeYears, setPliPolicyAgeYears] = useState(3); // <5 yrs vs >=5 yrs
 
   const [formData, setFormData] = useState({
     name: '', phone: '', segment: 'Assam Police & Battalions', dept: 'Dhemaji Civil Hospital',
@@ -273,6 +273,8 @@ export default function App() {
   const netPosbTds = posbOpts.form15g ? 0 : rawPosbTds;
 
   // PLI / RPLI TDS Math (Sec 194DA & Sec 10(10D))
+  // Rule: Regular maturity or death claim is 100% Tax-Free (0 TDS u/s 10(10D)).
+  // Early surrender before 5 years where payout >= ₹1,00,000 attracts 5% TDS on net gain (surrender value minus total premiums paid).
   const isPliEarlySurrender = Number(pliPolicyAgeYears) < 5;
   const pliNetGain = Math.max(0, Number(pliSurrenderVal) - Number(pliTotalPremiumsPaid));
   const pliTdsApplicable = isPliEarlySurrender && Number(pliSurrenderVal) >= 100000 && pliNetGain > 0;
@@ -404,13 +406,35 @@ export default function App() {
               </div>
             </div>
 
+            
             {/* Customer Segments, Pitching Strategy & Cross-Selling Matrix */}
             <div className="space-y-4">
-              <h3 className="text-base font-black text-slate-900">Customer Segments, Staff Pitching Scripts &amp; Cross-Selling Matrix</h3>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <h3 className="text-base font-black text-slate-900">Customer Segments &amp; Cross-Selling Matrix</h3>
+              </div>
+
+              {/* Psychological Master Pitch Script */}
+              <div className="bg-indigo-50 border border-indigo-200 p-5 rounded-2xl shadow-sm space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs"><i className="fa-solid fa-lightbulb"></i></div>
+                  <h4 className="font-black text-indigo-900 text-sm uppercase tracking-wide">The Psychological Master Pitch (Avoid "Insurance")</h4>
+                </div>
+                <p className="text-xs text-indigo-800 leading-relaxed font-medium">
+                  <strong>Psychology Insight:</strong> Younger generations instantly reject the word "Insurance" as an expense. Pitch PLI as an <strong>exclusive, high-yield Government Investment Scheme</strong> with built-in sovereign protection.
+                </p>
+                <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-inner text-xs text-slate-700 italic leading-relaxed space-y-2">
+                  <p>
+                    "Sir/Madam, as a [Police Officer/Doctor/Nurse], you belong to a very specific, selected category. The Government of India runs a highly exclusive wealth-doubler scheme that was originally available <strong>only to Postal and Telecom employees</strong>. Because it is run directly by the Government without any private middlemen, it offers the <strong>highest guaranteed bonus in India (₹52–₹76 per thousand)</strong>."
+                  </p>
+                  <p>
+                    "Recently, this exclusive scheme was extended to state and central emergency personnel like you. You invest monthly, and your capital is 100% sovereign-backed. The best part? After 3 years, if you need emergency cash, you get a <strong>direct loan against it at just 10% p.a.</strong> without breaking the investment. And as a complimentary government benefit, your family gets a <strong>sovereign death protection cover</strong> matching your target maturity amount from day one."
+                  </p>
+                </div>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                 {/* Segment 1 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3 hover:shadow-md transition">
                   <div className="flex justify-between items-start">
                     <h4 className="font-black text-slate-900 text-sm">1. Assam Police &amp; Police Battalions</h4>
                     <span className="text-[10px] bg-red-100 text-red-800 font-bold px-2.5 py-0.5 rounded-full">High Priority</span>
@@ -419,12 +443,12 @@ export default function App() {
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
                     <div><strong>Primary Product:</strong> PLI Santosh (Endowment Assurance) / Suraksha (Whole Life).</div>
                     <div><strong>Secondary Cross-Sell Product:</strong> Xonchoyor Xopun (Monthly 1-Yr TD Ladder) or Sukanya Samriddhi Yojana (SSY).</div>
-                    <div><strong>Staff Pitching Strategy:</strong> Emphasize 100% sovereign guarantee, high bonuses (₹52–₹76/1K SA), and the 3-year emergency loan facility (90% of surrender value) which provides immediate liquidity without policy surrender or tax penalty.</div>
+                    <div className="text-indigo-800 bg-indigo-50/50 p-2 rounded border border-indigo-100"><strong>Field Strategy:</strong> Focus on exclusivity and the 3-year emergency loan. "It's an elite investment for uniform personnel, offering cash-liquidity when duty calls, plus guaranteed family protection."</div>
                   </div>
                 </div>
 
                 {/* Segment 2 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3 hover:shadow-md transition">
                   <div className="flex justify-between items-start">
                     <h4 className="font-black text-slate-900 text-sm">2. Fire &amp; Emergency Services</h4>
                     <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2.5 py-0.5 rounded-full">First Responders</span>
@@ -433,12 +457,12 @@ export default function App() {
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
                     <div><strong>Primary Product:</strong> PLI Suraksha (Whole Life Assurance) for maximum risk cover.</div>
                     <div><strong>Secondary Cross-Sell Product:</strong> 5-Year Recurring Deposit (RD) or National Savings Certificate (NSC).</div>
-                    <div><strong>Staff Pitching Strategy:</strong> Highlight risk-heavy duty nature. Position Suraksha as high-security family protection with high bonuses and tax-free death/maturity claims under Section 10(10D).</div>
+                    <div className="text-indigo-800 bg-indigo-50/50 p-2 rounded border border-indigo-100"><strong>Field Strategy:</strong> Highlight risk-heavy duty. "A pure government savings fund that rewards your bravery with the highest sovereign bonus, securing your family's future tax-free."</div>
                   </div>
                 </div>
 
                 {/* Segment 3 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3 hover:shadow-md transition">
                   <div className="flex justify-between items-start">
                     <h4 className="font-black text-slate-900 text-sm">3. Healthcare Professionals</h4>
                     <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full">Medical Staff</span>
@@ -447,12 +471,12 @@ export default function App() {
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
                     <div><strong>Primary Product:</strong> PLI Santosh (High Sum Assured up to ₹50 Lakhs).</div>
                     <div><strong>Secondary Cross-Sell Product:</strong> Post Office Monthly Income Scheme (MIS) or Public Provident Fund (PPF).</div>
-                    <div><strong>Staff Pitching Strategy:</strong> Focus on tax planning (Section 80C deduction and tax-free Section 10(10D) returns), wealth accumulation, and professional financial security.</div>
+                    <div className="text-indigo-800 bg-indigo-50/50 p-2 rounded border border-indigo-100"><strong>Field Strategy:</strong> Focus on tax planning. "Doctors and nurses pay high taxes. This exclusive govt scheme gives 80C deductions upfront and 100% tax-free maturity under 10(10D), unlike bank FDs."</div>
                   </div>
                 </div>
 
                 {/* Segment 4 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3 hover:shadow-md transition">
                   <div className="flex justify-between items-start">
                     <h4 className="font-black text-slate-900 text-sm">4. Defence &amp; CAPF Units</h4>
                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2.5 py-0.5 rounded-full">Central Forces</span>
@@ -461,11 +485,12 @@ export default function App() {
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
                     <div><strong>Primary Product:</strong> RPLI Gram Santosh / PLI Suraksha.</div>
                     <div><strong>Secondary Cross-Sell Product:</strong> Kisan Vikas Patra (KVP) or Senior Citizens Savings Scheme (SCSS) for parents.</div>
-                    <div><strong>Staff Pitching Strategy:</strong> Stress hassle-free assignment of policy, centralized postal network service across India, and guaranteed sovereign returns unaffected by equity market volatility.</div>
+                    <div className="text-indigo-800 bg-indigo-50/50 p-2 rounded border border-indigo-100"><strong>Field Strategy:</strong> Stress mobility & security. "Your postings change, but India Post is everywhere. It's an elite central govt wealth-doubler immune to stock market crashes."</div>
                   </div>
                 </div>
               </div>
             </div>
+</div>
           </div>
         )}
 
@@ -611,7 +636,7 @@ export default function App() {
                 <div className="bg-white/10 p-3.5 rounded-xl border border-white/10">
                   <label className="block text-amber-300 font-bold uppercase mb-1">Monthly 1-Yr TD Deposit</label>
                   <select value={xxMonthly} onChange={(e) => setXxMonthly(Number(e.target.value))} className="w-full p-2 bg-slate-900 text-white rounded-lg font-bold">
-                    <option value={2000}>₹2,00,000 / mo</option>
+                    <option value={2000}>₹2,000 / mo</option>
                     <option value={5000}>₹5,000 / mo</option>
                     <option value={10000}>₹10,000 / mo</option>
                     <option value={20000}>₹20,000 / mo</option>
@@ -619,11 +644,11 @@ export default function App() {
                 </div>
                 <div className="bg-white/10 p-3.5 rounded-xl border border-white/10">
                   <span className="text-slate-300 font-bold uppercase block">Month 13+ Monthly Payout</span>
-                  <div className="text-xl font-black text-emerald-400 mt-1">₹{fmt(Math.round(xxMonthly * 1.0708))} / mo</div>
+                  <div className="text-xl font-black text-emerald-400 mt-1">₹{fmt(xxMonthlyPayout)} / mo</div>
                 </div>
                 <div className="bg-white/10 p-3.5 rounded-xl border border-white/10">
                   <span className="text-slate-300 font-bold uppercase block">Total Annual Payout</span>
-                  <div className="text-xl font-black text-amber-300 mt-1">₹{fmt(Math.round(xxMonthly * 1.0708) * 12)} / yr</div>
+                  <div className="text-xl font-black text-amber-300 mt-1">₹{fmt(xxTotalAnnual)} / yr</div>
                 </div>
               </div>
             </div>
